@@ -18,7 +18,7 @@ string createUid(uint jobid, immutable(Config) config, immutable(Canvas) canvas)
 private ubyte[] configToByteArray(uint jobid, immutable(Config) config, immutable(Canvas) canvas) pure nothrow @safe
 {
     immutable sz = int.sizeof;
-    auto buffer = new ubyte[sz * 24];
+    auto buffer = new ubyte[sz * 34];
 
     auto i = 0;
 
@@ -60,6 +60,22 @@ private ubyte[] configToByteArray(uint jobid, immutable(Config) config, immutabl
     foreach (h; 0 .. numheadgear)
     {
         buffer[(sz * i) .. (sz * (++i))] = nativeToLittleEndian(config.headgear[h]);
+    }
+
+    // Only added when set so that the ids of requests without hat effects stay the same
+    import hateffect : MaxHatEffects;
+
+    const numhateffect = min(MaxHatEffects, config.hateffect.length);
+
+    if (numhateffect > 0)
+    {
+        // Marker that separates the headgears from the hat effects
+        buffer[(sz * i) .. (sz * (++i))] = nativeToLittleEndian(uint.max);
+
+        foreach (h; 0 .. numhateffect)
+        {
+            buffer[(sz * i) .. (sz * (++i))] = nativeToLittleEndian(config.hateffect[h]);
+        }
     }
 
     return buffer[0 .. (sz * i)];

@@ -22,6 +22,7 @@ struct RenderRequestData
     @optional Nullable!string canvas;
     @optional Nullable!OutputFormat outputFormat;
     @optional Nullable!(uint[]) headgear;
+    @optional Nullable!(uint[]) hateffect;
     string[] job;
 }
 
@@ -102,6 +103,7 @@ string toString(const scope RenderRequestData data) pure @safe
     if (!data.canvas.isNull) putSingle(data.canvas.get, "canvas");
     if (!data.outputFormat.isNull) putSingle(data.outputFormat.get, "outputFormat");
     if (!data.headgear.isNull) putArray(data.headgear.get, "headgear");
+    if (!data.hateffect.isNull) putArray(data.hateffect.get, "hateffect");
 
     return app.data[0 .. $ - 2] ~ " }";
 }

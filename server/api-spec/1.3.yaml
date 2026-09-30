@@ -359,6 +359,15 @@ components:
           minimum: 0
           type: integer
           example: 0
+        hateffect:
+          description: Hat effects which should be drawn. The values are the hat effect ids of the client (HatEFID), which are the same as rAthena's HAT_EF_* constants.
+          type: array
+          maxItems: 8
+          items:
+            format: int32
+            minimum: 0
+            type: integer
+          example: [174]
         bodyPalette:
           format: int32
           description: Palette for the body sprite. Set to -1 to use the standard palette.

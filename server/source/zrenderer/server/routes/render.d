@@ -4,7 +4,7 @@ import config;
 import std.datetime : seconds;
 import std.typecons : Nullable;
 import std.zip : ArchiveMember, ZipArchive;
-import validation : isJobArgValid, isCanvasArgValid;
+import validation : isJobArgValid, isCanvasArgValid, isHatEffectArgValid;
 import vibe.core.concurrency : send, receiveTimeout, OwnerTerminated;
 import vibe.core.core : runWorkerTaskH;
 import vibe.core.log : logInfo, logError;
@@ -64,6 +64,12 @@ void handleRenderRequest(HTTPServerRequest req, HTTPServerResponse res) @trusted
         return;
     }
 
+    if (!isHatEffectArgValid(mergedConfig.hateffect))
+    {
+        setErrorResponse(res, HTTPStatus.badRequest, "Invalid hateffect element");
+        return;
+    }
+
     auto worker = runWorkerTaskH(&renderWorker, Task.getThis);
     send(worker, cast(immutable Config) mergedConfig);
 
@@ -72,7 +78,10 @@ void handleRenderRequest(HTTPServerRequest req, HTTPServerResponse res) @trusted
 
     try
     {
-        receiveTimeout(5.seconds,
+        // Hat effects extend animations to a full effect loop which takes longer to render
+        const timeout = mergedConfig.hateffect.length > 0 ? 30.seconds : 5.seconds;
+
+        receiveTimeout(timeout,
                 (immutable(string)[] filenames) {
                     response.output = filenames;
                     renderingSucceeded = true;

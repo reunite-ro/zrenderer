@@ -48,5 +48,13 @@ data\luafiles514\lua files\offsetitempos\offsetitempos_f.*
 data\luafiles514\lua files\offsetitempos\offsetitempos.*
 data\sprite\shadow.*
 ```
+
+The following files are optional and only required for hat effects (`--hateffect`):
+
+```
+data\luafiles514\lua files\hateffectinfo\*
+data\texture\effect\*
+data\sprite\이팩트\*
+```
 The format is ready to be used for the aforementioned zextractor.
 

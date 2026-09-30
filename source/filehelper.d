@@ -7,7 +7,7 @@ import std.zip : ZipArchive;
 
 string[] storeImages(const RawImage[] images, int requestFrame, immutable(Config) config,
         const scope string outputFilename, const scope string zipFilename, LogDg log,
-        float animationInterval, ZipArchive archive)
+        float animationInterval, ZipArchive archive, ushort animationDelayMs = 0)
 {
     import imageformats.png : saveToPngFile, saveToApngFile;
     import std.file : mkdirRecurse, FileException, read;
@@ -46,7 +46,8 @@ string[] storeImages(const RawImage[] images, int requestFrame, immutable(Config
 
     if (images.length > 1)
     {
-        auto names = storeAnimation(images, outputFilename, config, animationInterval, zipFilename, archive);
+        auto names = storeAnimation(images, outputFilename, config, animationInterval, zipFilename, archive,
+                animationDelayMs);
         filenames ~= names.filename;
     }
     else
@@ -87,14 +88,16 @@ private auto storeImage(const scope RawImage image, int frame, const scope strin
 
 private auto storeAnimation(const scope RawImage[] images, const scope string outputFilename,
         immutable(Config) config, float animationInterval, lazy const scope string zipFilename,
-        lazy ZipArchive archive)
+        lazy ZipArchive archive, ushort animationDelayMs)
 {
     import imageformats.png : saveToApngFile;
     import std.conv : to;
 
     auto names = getFilenames(outputFilename, config, zipFilename, config.outputFormat, config.action, -1);
 
-    saveToApngFile(images, names.filename, (25 * animationInterval).to!ushort);
+    const delay = animationDelayMs > 0 ? animationDelayMs : (25 * animationInterval).to!ushort;
+
+    saveToApngFile(images, names.filename, delay);
 
     if (config.outputFormat == OutputFormat.zip)
     {

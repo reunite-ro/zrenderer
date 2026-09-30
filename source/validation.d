@@ -85,6 +85,13 @@ import std.regex : ctRegex;
 
 immutable CanvasRegex = ctRegex!(`^([0-9]+)x([0-9]+)([\+\-][0-9]+)([\+\-][0-9]+)$`);
 
+bool isHatEffectArgValid(const scope uint[] hateffect) pure nothrow @safe @nogc
+{
+    import hateffect : MaxHatEffects;
+
+    return hateffect.length <= MaxHatEffects;
+}
+
 bool isCanvasArgValid(const scope string canvas) pure @safe
 {
     if (canvas.length == 0 || canvas == string.init)

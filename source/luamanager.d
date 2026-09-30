@@ -51,6 +51,8 @@ void loadRequiredLuaFiles(ref LuaState L, ResourceManager resManager, LogDg log)
     luaLoader("offsetitempos/offsetitempos_f", resManager, L, log);
     luaLoader("offsetitempos/offsetitempos", resManager, L, log);
 
+    loadHatEffectLuaFiles(L, resManager, log);
+
     import luad.error : LuaErrorException;
     import luad.lfunction : LuaFunction;
     import std.format : format;
@@ -98,6 +100,58 @@ private void luaLoader(string luaFilename, ResourceManager resManager, ref LuaSt
         {
             throw err;
         }
+    }
+}
+
+private void loadHatEffectLuaFiles(ref LuaState L, ResourceManager resManager, LogDg log)
+{
+    import hateffect : HatEffectLuaHelpers, HatEffectTableFile;
+    import luad.error : LuaErrorException;
+    import resource : ResourceException;
+    import std.file : exists;
+
+    // The official client uses lowercase names while some translation projects use CamelCase
+    bool loadFirstOf(string[] luaFilenames)
+    {
+        string lastError;
+        foreach (luaFilename; luaFilenames)
+        {
+            try
+            {
+                luaLoader(luaFilename, resManager, L, log);
+                return true;
+            }
+            catch (ResourceException err)
+            {
+                lastError = err.msg;
+            }
+        }
+        log(LogLevel.info, lastError ~ ". Hat effects will not be available.");
+        return false;
+    }
+
+    if (loadFirstOf(["hateffectinfo/hateffectids", "hateffectinfo/HatEffectIDs"]))
+    {
+        loadFirstOf(["hateffectinfo/hateffectinfo", "hateffectinfo/HatEffectInfo"]);
+    }
+
+    try
+    {
+        L.doString(HatEffectLuaHelpers);
+
+        if (exists(HatEffectTableFile))
+        {
+            L.doFile(HatEffectTableFile);
+        }
+        else
+        {
+            log(LogLevel.info, "Effect table \"" ~ HatEffectTableFile ~ "\" not found. " ~
+                    "Hat effects that use client effects will not be available.");
+        }
+    }
+    catch (LuaErrorException err)
+    {
+        log(LogLevel.warning, "While loading the hat effect table: " ~ err.msg);
     }
 }
 

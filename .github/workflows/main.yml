@@ -47,9 +47,11 @@ jobs:
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
           dub build --build=release --compiler=ldc2 :cli
           dub build --build=release --compiler=ldc2 :server
+          dub build --build=release --compiler=ldc2 :hateffecttool
           dub run --build=release --compiler=ldc2 :configgenerator
           move "bin\zrenderer.exe" "zrenderer.exe"
           move "bin\zrenderer-server.exe" "zrenderer-server.exe"
+          move "bin\zrenderer-hateffecttool.exe" "zrenderer-hateffecttool.exe"
           move "bin\libcrypto-1_1-x64.dll" "libcrypto-1_1-x64.dll"
           move "bin\libssl-1_1-x64.dll" "libssl-1_1-x64.dll"
           move "server\api-spec" "api-spec"
@@ -58,7 +60,7 @@ jobs:
       - name: Package
         shell: powershell
         run: |
-          Compress-Archive -Path zrenderer.exe,zrenderer-server.exe,libcrypto-1_1-x64.dll,libssl-1_1-x64.dll,resolver_data,RESOLVER.md,README.md,RESOURCES.md,zrenderer.example.conf,zrenderer.docker.conf,api-spec,api-doc -DestinationPath zrenderer-windows-x64-${{ env.VERSION }}.zip
+          Compress-Archive -Path zrenderer.exe,zrenderer-server.exe,zrenderer-hateffecttool.exe,libcrypto-1_1-x64.dll,libssl-1_1-x64.dll,resolver_data,RESOLVER.md,README.md,RESOURCES.md,zrenderer.example.conf,zrenderer.docker.conf,api-spec,api-doc -DestinationPath zrenderer-windows-x64-${{ env.VERSION }}.zip
 
       - name: Create Release
         uses: ncipollo/release-action@v1.14.0

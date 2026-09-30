@@ -8,6 +8,7 @@ Tool to render sprites from the game Ragnarok Online. This tool is available as 
   * [CLI](#cli)
     * [Example](#example)
   * [Server](#server)
+* [Hat effects](#hat-effects)
 * [Docker/Podman](#docker-podman)
 * [Dependencies when building](#dependencies-when-building)
   * [Linux](#linux)
@@ -36,6 +37,7 @@ A tool to render sprites from Ragnarok Online
                  --garment Garment which should be attached to the players body. Default: 0
                   --weapon Weapon which should be attached to the players body. Default: 0
                   --shield Shield which should be attached to the players body. Default: 0
+               --hateffect Hat effects which should be drawn. Can contain up to 8 comma separated values. The values are the hat effect ids of the client (HatEFID in hateffectinfo), which are the same as rAthena's HAT_EF_* constants. Default: 
 -a                --action Action of the job which should be drawn. Default: 0
 -f                 --frame Frame of the action which should be drawn. Set to -1 to draw all frames. Default: -1
              --bodyPalette Palette for the body sprite. Set to -1 to use the standard palette. Default: -1
@@ -109,6 +111,38 @@ You can find the openApi specifications here: [OpenAPI specifications](https://g
 
 And documentation here: https://github.com/zhad3/zrenderer/tree/main/server/api-doc.  
 The html can be viewed directly here: https://z0q.neocities.org/ragnarok-online-tools/zrenderer/api/
+
+## Hat effects
+Hat effects (e.g. _Costume Spotlight_) are drawn when their ids are passed with `--hateffect` (CLI/config) or
+`"hateffect": [...]` (server). The client does not know which headgear has which effect, the server sends it
+(rAthena: `hateffect HAT_EF_*,true;` in the item script). Look up the effect of an item in your item database and pass
+its `HAT_EF_*` value, which is the same as the client's `HatEFID`.
+
+**Render character with id 4001 (High Novice) with the hat effect 174 (HAT_EF_C_Spot_Light, Costume Spotlight)**  
+`./zrenderer --job=4001 --hateffect=174`
+
+How hat effects are resolved:
+* `data/luafiles514/lua files/hateffectinfo/hateffectinfo.lub` defines every hat effect. Most of them reference a
+  `.str` animation in `data/texture/effect/` (`resourceFileName`) which is rendered directly, including its position
+  (`hatEffectPos`, `hatEffectPosX`) and whether it is drawn behind the character (`isRenderBeforeCharacter`).
+* The remaining ones only reference an effect id (`hatEffectID`) of the client's internal effect table, which is
+  compiled into the client executable. These are mapped in [resolver_data/hat_effect_table.lua](resolver_data/hat_effect_table.lua).
+  The table ships with the entries that are known and can be extended with your own entries (`STR` or `SPR` files,
+  or a `SCALE` of the character).
+* `zrenderer-hateffecttool` lists every hat effect of your resources and whether it can be drawn. For effects without
+  a table entry it suggests candidate files based on the effect name:  
+  `dub run :hateffecttool -- --resourcepath=<path>` or `./zrenderer-hateffecttool --resourcepath=<path>`
+
+When a hat effect is animated and all frames are requested (`--frame=-1`) the animation is extended so that it covers
+at least one full loop of the effect (up to 240 frames). Without a canvas the image grows to fit the effect.
+When a single frame is requested, the frame of the effect with the most visible layers is used.
+
+Limitations:
+* Effects are drawn in 2D like the client's billboards. 3D and procedural client effects (weather, auras,
+  color changes) are not supported.
+* Str texture coordinates are ignored (the whole texture is used), like roBrowser does.
+* The position unit of `hatEffectPos` is 7 pixels (negative values move up). If effects of your client appear
+  shifted, adjust `HatEffectUnitPx` in [source/hateffect.d](source/hateffect.d).
 
 ## Docker/Podman
 You can use the pre-built and published images to run the server.

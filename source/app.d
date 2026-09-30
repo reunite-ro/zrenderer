@@ -2,6 +2,7 @@ module app;
 
 import config : Config, Gender, HeadDirection, OutputFormat, MadogearType, NoJobId;
 import draw : Canvas, canvasFromString;
+import hateffect : HatEffects;
 import logging : LogLevel, LogDg;
 import luad.state : LuaState;
 import resolver;
@@ -246,14 +247,47 @@ string[] process(immutable Config config, LogDg log, LuaState L,
                 makeIndex!"a.zIndex < b.zIndex"(sprites, index);
             }
 
-            RawImage[] images = drawPlayer(sprites, config.action,
-                    (requestFrame < 0) ? uint.max : requestFrame, &sortIndexDelegate, canvas);
+            const uint drawFrame = (requestFrame < 0) ? uint.max : requestFrame;
 
-            if (isBaby(jobid))
+            import hateffect : loadHatEffects, createTimeline, composeFrames;
+
+            HatEffects hatEffects;
+
+            if (config.hateffect.length > 0)
+            {
+                hatEffects = loadHatEffects(config.hateffect, headAnchor(sprites, config.action, requestFrame),
+                        isDoram(jobid), L, resManager, log);
+            }
+
+            const bool drawHatEffects = hatEffects.layers.length > 0;
+
+            immutable(Canvas) renderCanvas = (drawHatEffects && canvas == Canvas.init)
+                ? canvasIncludingEffects(sprites, config.action, drawFrame, hatEffects)
+                : canvas;
+
+            RawImage[] images = drawPlayer(sprites, config.action, drawFrame, &sortIndexDelegate, renderCanvas);
+
+            ushort animationDelayMs = 0;
+
+            if (drawHatEffects && renderCanvas != Canvas.init)
+            {
+                const single = requestFrame >= 0;
+                const timeline = createTimeline(images.length, animationInterval * 25, hatEffects.layers);
+
+                images = composeFrames(images, hatEffects.layers, renderCanvas, timeline, single);
+
+                if (!single)
+                {
+                    animationDelayMs = timeline.delayMs;
+                }
+            }
+
+            const scale = (isBaby(jobid) ? 0.75f : 1f) * hatEffects.scale;
+
             {
                 import renderer : applyBabyScaling;
 
-                images.applyBabyScaling(0.75);
+                images.applyBabyScaling(scale);
             }
 
 
@@ -262,7 +296,7 @@ string[] process(immutable Config config, LogDg log, LuaState L,
                 import filehelper : storeImages;
 
                 auto fnames = storeImages(images, requestFrame, config, outputFilename, zipFilename, log,
-                        animationInterval, archive);
+                        animationInterval, archive, animationDelayMs);
 
                 if (config.outputFormat != OutputFormat.zip)
                 {
@@ -774,6 +808,52 @@ Sprite[] processPlayer(uint jobid, LogDg log, immutable Config config, Resolver 
     }
 
     return sprites;
+}
+
+/// Position of the head relative to the feet. This is the attach point of the body.
+private auto headAnchor(Sprite[] sprites, uint action, int frame)
+{
+    import linearalgebra : Vector2;
+
+    if (sprites.length == 0)
+    {
+        return Vector2(0, 0);
+    }
+
+    const bodysprite = sprites[0];
+    const uint bodyframe = frame < 0 ? 0 : frame;
+
+    if (bodysprite.act.attachpoints(action, bodyframe).length == 0)
+    {
+        return Vector2(0, 0);
+    }
+
+    const attachpoint = bodysprite.act.attachpoint(action, bodyframe, 0);
+
+    return Vector2(attachpoint.x, attachpoint.y);
+}
+
+/// Canvas that fits the character as well as all hat effects
+private immutable(Canvas) canvasIncludingEffects(Sprite[] sprites, uint action, uint frame,
+        HatEffects hatEffects)
+{
+    import hateffect : effectBounds;
+    import renderer : playerBoundingBox;
+
+    auto box = playerBoundingBox(sprites, action, frame);
+    const effectBox = effectBounds(hatEffects.layers);
+
+    if (!effectBox.isInfinite)
+    {
+        box.updateBounds(effectBox);
+    }
+
+    if (box.isInfinite || box.width == 0 || box.height == 0)
+    {
+        return Canvas.init;
+    }
+
+    return immutable(Canvas)(box.width, box.height, -box.x1, -box.y1);
 }
 
 bool shouldDrawShadow(bool enableShadow, uint jobid, uint action) pure nothrow @safe @nogc

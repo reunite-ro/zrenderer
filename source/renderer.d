@@ -138,18 +138,16 @@ RawImage[] drawAction(scope Sprite sprite, uint action)
 
 alias sortDelegate = void delegate(ref int[] index, uint frame, ulong maxframes);
 
-RawImage[] drawPlayer(scope Sprite[] sprites, uint action, uint frame,
-        sortDelegate sortDg, immutable(Canvas) canvas)
+private DrawObject[] collectDrawObjects(scope Sprite[] sprites, uint action, uint frame,
+        out Box totalBoundingBox, out ulong maxframes)
 {
     DrawObject[] drawobjects;
     drawobjects.reserve(sprites.length);
 
-    Box totalBoundingBox;
     totalBoundingBox.toInfinity();
 
     bool drawSingleFrame = frame < uint.max;
-    ulong startframe = drawSingleFrame ? frame : 0;
-    ulong maxframes = drawSingleFrame ? frame + 1 : 0;
+    maxframes = drawSingleFrame ? frame + 1 : 0;
 
     foreach (sprite; sprites)
     {
@@ -184,6 +182,29 @@ RawImage[] drawPlayer(scope Sprite[] sprites, uint action, uint frame,
 
         drawobjects ~= drawobject;
     }
+
+    return drawobjects;
+}
+
+/// Bounding box of all sprites as it is used by drawPlayer when no canvas is set
+Box playerBoundingBox(scope Sprite[] sprites, uint action, uint frame)
+{
+    Box totalBoundingBox;
+    ulong maxframes;
+    collectDrawObjects(sprites, action, frame, totalBoundingBox, maxframes);
+    return totalBoundingBox;
+}
+
+RawImage[] drawPlayer(scope Sprite[] sprites, uint action, uint frame,
+        sortDelegate sortDg, immutable(Canvas) canvas)
+{
+    Box totalBoundingBox;
+    ulong maxframes;
+
+    DrawObject[] drawobjects = collectDrawObjects(sprites, action, frame, totalBoundingBox, maxframes);
+
+    bool drawSingleFrame = frame < uint.max;
+    ulong startframe = drawSingleFrame ? frame : 0;
 
     const totalWidth = canvas != Canvas.init ? canvas.width : totalBoundingBox.width;
     const totalHeight = canvas != Canvas.init ? canvas.height : totalBoundingBox.height;

@@ -7,3 +7,5 @@ public import resource.act;
 public import resource.palette;
 public import resource.lua;
 public import resource.imf;
+public import resource.str;
+public import resource.texture;

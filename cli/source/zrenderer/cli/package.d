@@ -21,10 +21,11 @@ int main(string[] args)
         config = loadConfig!(Config, usage)(args, helpInformation, clc);
 
         import std.exception : enforce;
-        import validation : isJobArgValid, isCanvasArgValid;
+        import validation : isJobArgValid, isCanvasArgValid, isHatEffectArgValid;
 
         enforce!GetOptException(isJobArgValid(config.job), "job ids are not valid.");
         enforce!GetOptException(isCanvasArgValid(config.canvas), "canvas is not valid.");
+        enforce!GetOptException(isHatEffectArgValid(config.hateffect), "too many hateffect values.");
     }
     catch (GetOptException e)
     {

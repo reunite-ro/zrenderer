@@ -139,6 +139,10 @@ struct Config
     @Desc("Shield which should be attached to the players body.")
     uint shield;
 
+    @Desc("Hat effects which should be drawn. Can contain up to 8 comma separated values. The values are the " ~
+            "hat effect ids of the client (HatEFID in hateffectinfo), which are the same as rAthena's HAT_EF_* constants.")
+    uint[] hateffect;
+
     @Short("a") @Desc("Action of the job which should be drawn.")
     uint action = 0;
 

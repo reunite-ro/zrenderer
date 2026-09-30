@@ -1,0 +1,16 @@
+{
+	"description": "Lists hat effects and their render status. Suggests files for missing effect table entries.",
+	"name": "hateffecttool",
+    "targetName": "zrenderer-hateffecttool",
+    "targetPath": "../bin",
+    "targetType": "executable",
+    "dependencies": {
+        "zconfig": "~>1.0",
+        "libpng-apng": "~>1.0",
+        "luad": {"path": "../LuaD/"},
+        "zencoding:windows949": "~>1.0"
+    },
+    "sourcePaths": ["../source/", "./source/"],
+    "importPaths": ["../source/", "./source/"],
+    "mainSourceFile": "source/zrenderer/hateffecttool/package.d"
+}
