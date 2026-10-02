@@ -41,7 +41,7 @@ enum HatEffectLuaHelpers = q{
         end
         return t.resourceFileName or "", t.hatEffectPos or 0, t.hatEffectPosX or 0,
             t.isRenderBeforeCharacter == true, t.isAttachedHead == true,
-            t.hatEffectID or -1, t.hatEffectExtraDoramY or 0
+            t.hatEffectID or -1, t.isIgnoreRiding == true
     end
 
     function __zr_EffectTableCount(id)
@@ -989,7 +989,41 @@ struct HatEffectInfo
     bool renderBefore;
     bool attachedHead;
     int effectId = -1;
-    float extraDoramY = 0;
+    bool ignoreRiding;
+}
+
+/**
+  Extra height of a mounted character in units of HatEffectUnitPx, as the client defines it.
+  Hat effects are raised by it unless they ignore riding or are attached to the head.
+ */
+int ridingHeight(uint jobid) pure nothrow @safe @nogc
+{
+    import resolver : isDoram;
+
+    switch (jobid)
+    {
+    case 13, 21, 4014, 4022, 4036, 4044: // Peco Peco
+        return 3;
+    case 4080: .. case 4095: // Dragon, Gryphon, Warg and Mado Gear
+    case 4109: .. case 4112:
+    case 4278: .. case 4281:
+        return 5;
+    case 4265: .. case 4277: // Costume mounts, dorams are not raised
+    case 4309: .. case 4315:
+    case 4358: .. case 4360:
+        return isDoram(jobid) ? 0 : 5;
+    default:
+        return 0;
+    }
+}
+
+unittest
+{
+    assert(ridingHeight(4008) == 0); // Lord Knight
+    assert(ridingHeight(4014) == 3); // Lord Knight on a Peco Peco
+    assert(ridingHeight(4080) == 5); // Rune Knight on a dragon
+    assert(ridingHeight(4265) == 5); // Dragon Knight on a costume mount
+    assert(ridingHeight(4315) == 0); // Spirit Handler on a costume mount
 }
 
 /// Converts a Windows-949 string coming from the client lua files to a UTF-8 path
@@ -1032,7 +1066,7 @@ HatEffectInfo hatEffectInfo(uint id, ref LuaState L)
         info.renderBefore = ret[3].to!bool;
         info.attachedHead = ret[4].to!bool;
         info.effectId = ret[5].to!int;
-        info.extraDoramY = ret[6].to!float;
+        info.ignoreRiding = ret[6].to!bool;
     }
     catch (LuaErrorException err)
     {
@@ -1169,11 +1203,12 @@ private SprEffectLayer loadSprLayer(string file, Vector2 anchor, bool behind, Re
   Loads the given hat effects.
   Params:
     ids = Hat effect ids (HatEFID)
-    isDoram = Whether the character is a doram
+    jobid = Job of the character. Mounts and dorams change the height of the effects.
  */
-HatEffects loadHatEffects(const scope uint[] ids, bool isDoram,
+HatEffects loadHatEffects(const scope uint[] ids, uint jobid,
         ref LuaState L, ResourceManager resManager, LogDg log)
 {
+    import resolver : isDoram;
     import std.format : format;
 
     HatEffects effects;
@@ -1187,10 +1222,20 @@ HatEffects loadHatEffects(const scope uint[] ids, bool isDoram,
             continue;
         }
 
-        // Negative hatEffectPos values move the effect down. The str files of attached head effects
-        // are already authored at head height, the client does not move them to the head.
-        Vector2 anchor = Vector2(info.posX * HatEffectUnitPx,
-                -(info.pos + (isDoram ? info.extraDoramY : 0)) * HatEffectUnitPx);
+        // The client adds hatEffectPos to the height of the effect, so negative values move it down.
+        // The str files of attached head effects are already authored at head height, the client
+        // does not move them to the head. They are lowered for dorams and ignore mounts instead.
+        float height = info.pos;
+        if (!info.ignoreRiding && !info.attachedHead)
+        {
+            height += ridingHeight(jobid);
+        }
+        if (info.attachedHead && isDoram(jobid))
+        {
+            height -= 3;
+        }
+
+        Vector2 anchor = Vector2(info.posX * HatEffectUnitPx, -height * HatEffectUnitPx);
 
         if (info.resourceFileName.length > 0)
         {

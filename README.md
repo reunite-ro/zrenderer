@@ -145,6 +145,10 @@ Limitations:
 * The position unit of `hatEffectPos` is 7 pixels (negative values move down, like the client). If effects of your
   client appear shifted, adjust `HatEffectUnitPx` in [source/hateffect.d](source/hateffect.d).
 
+Like the client, effects move up with the rider on mounts (Peco Peco: 3 units, Dragon, Gryphon, Warg, Mado Gear and
+costume mounts: 5 units) unless they have `isIgnoreRiding` or `isAttachedHead`. Effects with `isAttachedHead` are
+lowered by 3 units for dorams.
+
 ## Docker/Podman
 You can use the pre-built and published images to run the server.
 

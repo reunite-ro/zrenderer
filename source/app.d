@@ -255,7 +255,7 @@ string[] process(immutable Config config, LogDg log, LuaState L,
 
             if (config.hateffect.length > 0)
             {
-                hatEffects = loadHatEffects(config.hateffect, isDoram(jobid), L, resManager, log);
+                hatEffects = loadHatEffects(config.hateffect, jobid, L, resManager, log);
             }
 
             const bool drawHatEffects = hatEffects.layers.length > 0;
