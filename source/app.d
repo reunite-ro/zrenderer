@@ -255,8 +255,7 @@ string[] process(immutable Config config, LogDg log, LuaState L,
 
             if (config.hateffect.length > 0)
             {
-                hatEffects = loadHatEffects(config.hateffect, headAnchor(sprites, config.action, requestFrame),
-                        isDoram(jobid), L, resManager, log);
+                hatEffects = loadHatEffects(config.hateffect, isDoram(jobid), L, resManager, log);
             }
 
             const bool drawHatEffects = hatEffects.layers.length > 0;
@@ -271,7 +270,9 @@ string[] process(immutable Config config, LogDg log, LuaState L,
 
             if (drawHatEffects && renderCanvas != Canvas.init)
             {
-                const single = requestFrame >= 0;
+                // Effects stay animated when all frames were requested, even if the body only has a
+                // single frame (e.g. --headdir=straight for the stand and sit actions)
+                const single = config.frame >= 0;
                 const timeline = createTimeline(images.length, animationInterval * 25, hatEffects.layers);
 
                 images = composeFrames(images, hatEffects.layers, renderCanvas, timeline, single);
@@ -808,29 +809,6 @@ Sprite[] processPlayer(uint jobid, LogDg log, immutable Config config, Resolver 
     }
 
     return sprites;
-}
-
-/// Position of the head relative to the feet. This is the attach point of the body.
-private auto headAnchor(Sprite[] sprites, uint action, int frame)
-{
-    import linearalgebra : Vector2;
-
-    if (sprites.length == 0)
-    {
-        return Vector2(0, 0);
-    }
-
-    const bodysprite = sprites[0];
-    const uint bodyframe = frame < 0 ? 0 : frame;
-
-    if (bodysprite.act.attachpoints(action, bodyframe).length == 0)
-    {
-        return Vector2(0, 0);
-    }
-
-    const attachpoint = bodysprite.act.attachpoint(action, bodyframe, 0);
-
-    return Vector2(attachpoint.x, attachpoint.y);
 }
 
 /// Canvas that fits the character as well as all hat effects

@@ -45,7 +45,7 @@ ZrEffectTable = {
 		{ type = "STR", file = "ab_offertorium_ring.str" }
 	},
 	[1130] = { -- EF_BAKURETSU_HADOU
-		{ type = "SPR", file = "bakuretsu_hadou/bakuretsu_hadou", head = true, yOffset = -50 }
+		{ type = "SPR", file = "bakuretsu_hadou/bakuretsu_hadou", yOffset = -50 }
 	},
 	[1240] = { -- EF_DIGITAL_SPACE
 		{ type = "SPR", file = "digital_space/digital_space", behind = true }

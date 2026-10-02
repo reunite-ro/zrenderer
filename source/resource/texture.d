@@ -96,8 +96,16 @@ RawImage decodeBmp(const(ubyte)[] buffer, string name = "")
     uint colorsUsed = buffer.peekLE!uint(46);
 
     enforce!ResourceException(width > 0 && rawHeight != 0 && width <= 4096 && abs(rawHeight) <= 4096, error ~ name);
-    enforce!ResourceException(compression == 0 || (compression == 3 && bpp == 32), error ~ name);
-    enforce!ResourceException(bpp == 4 || bpp == 8 || bpp == 24 || bpp == 32, error ~ name);
+    enforce!ResourceException(compression == 0 || (compression == 3 && (bpp == 16 || bpp == 32)), error ~ name);
+    enforce!ResourceException(bpp == 4 || bpp == 8 || bpp == 16 || bpp == 24 || bpp == 32, error ~ name);
+
+    // 16 bit pixels are X1R5G5B5 unless the bit fields (stored after the info header) say R5G6B5
+    bool rgb565 = false;
+    if (bpp == 16 && compression == 3)
+    {
+        enforce!ResourceException(buffer.length >= 58, error ~ name);
+        rgb565 = buffer.peekLE!uint(54) == 0xF800;
+    }
 
     const bool topDown = rawHeight < 0;
     const uint height = cast(uint) abs(rawHeight);
@@ -144,6 +152,26 @@ RawImage decodeBmp(const(ubyte)[] buffer, string name = "")
                 break;
             case 8:
                 pixel = palette[buffer[row + x]];
+                break;
+            case 16:
+                const v = buffer.peekLE!ushort(row + x * 2);
+                uint r, g, b;
+                if (rgb565)
+                {
+                    r = (v >> 11) & 0x1F;
+                    g = (v >> 5) & 0x3F;
+                    g = (g << 2) | (g >> 4);
+                }
+                else
+                {
+                    r = (v >> 10) & 0x1F;
+                    g = (v >> 5) & 0x1F;
+                    g = (g << 3) | (g >> 2);
+                }
+                b = v & 0x1F;
+                r = (r << 3) | (r >> 2);
+                b = (b << 3) | (b >> 2);
+                pixel = rgba(r, g, b, isColorKey(r, g, b) ? 0 : 0xFF);
                 break;
             case 24:
                 const p = row + x * 3;
@@ -317,6 +345,20 @@ unittest
     assert(img.pixels[1] == rgba(0, 0, 255, 255)); // top right blue
     assert(img.pixels[2] == rgba(255, 0, 0, 255)); // bottom left red
     assert(img.pixels[3].a == 0); // magenta is transparent
+}
+
+unittest
+{
+    import std.bitmanip : nativeToLittleEndian;
+
+    // 2x1 16-bit X1R5G5B5: [magenta, pure green]
+    auto data = bmpHeader(2, 1, 16, 0, 4);
+    data ~= nativeToLittleEndian(cast(ushort) 0x7C1F);
+    data ~= nativeToLittleEndian(cast(ushort) 0x03E0);
+
+    auto img = decodeBmp(data);
+    assert(img.pixels[0].a == 0); // magenta is transparent
+    assert(img.pixels[1] == rgba(0, 255, 0, 255));
 }
 
 unittest

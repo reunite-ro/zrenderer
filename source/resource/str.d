@@ -165,6 +165,26 @@ class StrResource : BaseResource
                 key.mtpreset = buffer.peekLE!uint(&offset);
             }
         }
+
+        // Some files contain garbage instead of the number of keys (e.g. efst_rabbit_aura/toto.str
+        // contains the text "Fram"). Nothing is drawn after the last keyframe, so clamp to it.
+        int lastFrame = 0;
+        foreach (const layer; this.layers)
+        {
+            foreach (const key; layer.keyframes)
+            {
+                if (key.frame > lastFrame)
+                {
+                    lastFrame = key.frame;
+                }
+            }
+        }
+
+        const ulong usedKeys = cast(ulong) lastFrame + 1;
+        if (this.maxKey > usedKeys + cast(ulong) this.fps * 10)
+        {
+            this.maxKey = cast(uint) usedKeys;
+        }
     }
 }
 
@@ -253,6 +273,12 @@ unittest
     assert(str.durationMs == 500);
 
     import std.exception : assertThrown;
+
+    // A bogus number of keys is clamped to the last keyframe
+    auto bogus = buildTestStr(60, 0x6D617246, ["a.bmp"], [key]);
+    auto bogusStr = new StrResource("bogus", "");
+    bogusStr.load(bogus);
+    assert(bogusStr.maxKey == 4);
 
     auto broken = new StrResource("broken", "");
     assertThrown!ResourceException(broken.load(data[0 .. $ - 10]));

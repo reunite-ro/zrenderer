@@ -13,9 +13,8 @@ enum MaxHatEffects = 8;
 /// Maximum number of frames an animation with hat effects may contain
 enum MaxEffectFrames = 240;
 
-/// Pixels per unit of hatEffectPos/hatEffectPosX. Negative hatEffectPos values move the effect up
-/// (the game world uses negative values for heights). Calibrated against roBrowser's conversion
-/// (1/5 of a cell with 35 pixels per cell).
+/// Pixels per unit of hatEffectPos/hatEffectPosX (1/5 of a cell with 35 pixels per cell). The client adds
+/// hatEffectPos to the height of the effect, so negative values move the effect down.
 enum HatEffectUnitPx = 7f;
 
 /// Str effects are authored around this point
@@ -126,7 +125,11 @@ struct PremulImage
 
     RawImage toRawImage() const pure nothrow @safe
     {
-        import std.math : round;
+        // std.math.round is impure with the Microsoft C runtime. The values are clamped to 0..1.
+        static ubyte round(float value) pure nothrow @safe @nogc
+        {
+            return cast(ubyte)(value + 0.5f);
+        }
 
         RawImage image;
         image.width = this.width;
@@ -143,12 +146,12 @@ struct PremulImage
             ubyte channel(float premul)
             {
                 const v = premul / a;
-                return cast(ubyte) round((v > 1 ? 1 : (v < 0 ? 0 : v)) * 255);
+                return round((v > 1 ? 1 : (v < 0 ? 0 : v)) * 255);
             }
             pixel.r = channel(this.data[i * 4]);
             pixel.g = channel(this.data[i * 4 + 1]);
             pixel.b = channel(this.data[i * 4 + 2]);
-            pixel.a = cast(ubyte) round((a > 1 ? 1 : a) * 255);
+            pixel.a = round((a > 1 ? 1 : a) * 255);
         }
 
         return image;
@@ -168,6 +171,7 @@ BlendMode blendModeOf(uint destalpha) pure nothrow @safe @nogc
     {
     case 2: // D3DBLEND_ONE
     case 4: // D3DBLEND_INVSRCCOLOR
+    case 7: // D3DBLEND_DESTALPHA: the client's back buffer has no alpha channel, so this is ONE
         return BlendMode.plus;
     default:
         return BlendMode.over;
@@ -1115,15 +1119,31 @@ private StrEffectLayer loadStrLayer(string file, Vector2 anchor, bool behind, Re
             }
 
             PremulTexture image;
-            try
+            string error;
+            // Textures are relative to the str file. Some str files (e.g. 2023RTC_S_Robe1/gold1.str)
+            // use textures that only exist in data/texture/effect itself.
+            const candidates = str.textureDirectory.length > 0
+                ? [buildPath(str.textureDirectory, name), name] : [name];
+            foreach (candidate; candidates)
             {
-                auto texture = resManager.get!TextureResource(buildPath(str.textureDirectory, name));
-                texture.load();
-                image = PremulTexture(texture.image);
+                try
+                {
+                    auto texture = resManager.get!TextureResource(candidate);
+                    texture.load();
+                    image = PremulTexture(texture.image);
+                    break;
+                }
+                catch (ResourceException err)
+                {
+                    if (error.length == 0)
+                    {
+                        error = err.msg;
+                    }
+                }
             }
-            catch (ResourceException err)
+            if (image.empty && error.length > 0)
             {
-                log(LogLevel.warning, err.msg);
+                log(LogLevel.warning, error);
             }
 
             cache[name] = image;
@@ -1149,10 +1169,9 @@ private SprEffectLayer loadSprLayer(string file, Vector2 anchor, bool behind, Re
   Loads the given hat effects.
   Params:
     ids = Hat effect ids (HatEFID)
-    headAnchor = Position of the head relative to the feet (attach point of the body)
     isDoram = Whether the character is a doram
  */
-HatEffects loadHatEffects(const scope uint[] ids, Vector2 headAnchor, bool isDoram,
+HatEffects loadHatEffects(const scope uint[] ids, bool isDoram,
         ref LuaState L, ResourceManager resManager, LogDg log)
 {
     import std.format : format;
@@ -1168,12 +1187,10 @@ HatEffects loadHatEffects(const scope uint[] ids, Vector2 headAnchor, bool isDor
             continue;
         }
 
+        // Negative hatEffectPos values move the effect down. The str files of attached head effects
+        // are already authored at head height, the client does not move them to the head.
         Vector2 anchor = Vector2(info.posX * HatEffectUnitPx,
-                (info.pos + (isDoram ? info.extraDoramY : 0)) * HatEffectUnitPx);
-        if (info.attachedHead)
-        {
-            anchor = anchor + headAnchor;
-        }
+                -(info.pos + (isDoram ? info.extraDoramY : 0)) * HatEffectUnitPx);
 
         if (info.resourceFileName.length > 0)
         {

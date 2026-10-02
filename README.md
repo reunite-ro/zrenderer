@@ -134,15 +134,16 @@ How hat effects are resolved:
   `dub run :hateffecttool -- --resourcepath=<path>` or `./zrenderer-hateffecttool --resourcepath=<path>`
 
 When a hat effect is animated and all frames are requested (`--frame=-1`) the animation is extended so that it covers
-at least one full loop of the effect (up to 240 frames). Without a canvas the image grows to fit the effect.
+at least one full loop of the effect (up to 240 frames). This also applies when the body only has a single frame
+(e.g. `--headdir=straight`). Without a canvas the image grows to fit the effect.
 When a single frame is requested, the frame of the effect with the most visible layers is used.
 
 Limitations:
 * Effects are drawn in 2D like the client's billboards. 3D and procedural client effects (weather, auras,
   color changes) are not supported.
 * Str texture coordinates are ignored (the whole texture is used), like roBrowser does.
-* The position unit of `hatEffectPos` is 7 pixels (negative values move up). If effects of your client appear
-  shifted, adjust `HatEffectUnitPx` in [source/hateffect.d](source/hateffect.d).
+* The position unit of `hatEffectPos` is 7 pixels (negative values move down, like the client). If effects of your
+  client appear shifted, adjust `HatEffectUnitPx` in [source/hateffect.d](source/hateffect.d).
 
 ## Docker/Podman
 You can use the pre-built and published images to run the server.

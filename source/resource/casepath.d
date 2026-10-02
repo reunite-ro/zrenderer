@@ -69,7 +69,7 @@ string findPathCaseInsensitive(string baseDirectory, string relativePath)
 unittest
 {
     import std.file : mkdirRecurse, write, rmdirRecurse, tempDir, exists;
-    import std.path : buildPath;
+    import std.path : buildPath, buildNormalizedPath, filenameCmp;
     import std.conv : to;
     import std.process : thisProcessID;
 
@@ -77,11 +77,16 @@ unittest
     mkdirRecurse(buildPath(base, "Effect", "Spot_Light"));
     scope (exit) rmdirRecurse(base);
 
-    write(buildPath(base, "Effect", "Spot_Light", "Spotlight.str"), "x");
+    const expected = buildPath(base, "Effect", "Spot_Light", "Spotlight.str");
+    write(expected, "x");
 
-    assert(findPathCaseInsensitive(base, "Effect/Spot_Light/Spotlight.str") ==
-            buildPath(base, "Effect", "Spot_Light", "Spotlight.str"));
-    assert(findPathCaseInsensitive(base, "effect/spot_light/spotlight.str") ==
-            buildPath(base, "Effect", "Spot_Light", "Spotlight.str"));
+    // Separators may be mixed and Windows file systems are case insensitive
+    bool samePath(string path)
+    {
+        return filenameCmp(buildNormalizedPath(path), expected) == 0;
+    }
+
+    assert(samePath(findPathCaseInsensitive(base, "Effect/Spot_Light/Spotlight.str")));
+    assert(samePath(findPathCaseInsensitive(base, "effect/spot_light/spotlight.str")));
     assert(findPathCaseInsensitive(base, "effect/missing.str") == "");
 }
