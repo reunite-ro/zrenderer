@@ -9,9 +9,9 @@ module resource.casepath;
  */
 string findPathCaseInsensitive(string baseDirectory, string relativePath)
 {
-    import std.file : exists, isDir, dirEntries, SpanMode, FileException;
-    import std.path : buildPath, baseName, pathSplitter;
-    import std.uni : toLower;
+    import std.array : array;
+    import std.file : exists;
+    import std.path : buildPath, pathSplitter;
 
     const exactPath = buildPath(baseDirectory, relativePath);
 
@@ -20,50 +20,71 @@ string findPathCaseInsensitive(string baseDirectory, string relativePath)
         return exactPath;
     }
 
-    string current = baseDirectory;
+    return findComponents(baseDirectory, pathSplitter(relativePath).array);
+}
 
-    foreach (component; pathSplitter(relativePath))
+/**
+  Resolves the path components below directory. Data extracted from several
+  GRFs on a case sensitive file system can contain the same folder more than
+  once with different casing (e.g. efst_C_Dark_Lord_Cloak and
+  efst_c_dark_lord_cloak, each with some of the files), so every matching
+  entry is tried, the exact casing first.
+ */
+private string findComponents(string directory, const scope string[] components)
+{
+    import std.file : exists, isDir, dirEntries, SpanMode, FileException;
+    import std.path : buildPath, baseName;
+    import std.uni : toLower;
+
+    if (components.length == 0)
     {
-        const candidate = buildPath(current, component);
-        if (exists(candidate))
-        {
-            current = candidate;
-            continue;
-        }
-
-        if (!exists(current) || !isDir(current))
-        {
-            return "";
-        }
-
-        const lowerComponent = toLower(component);
-        string found;
-
-        try
-        {
-            foreach (entry; dirEntries(current, SpanMode.shallow, false))
-            {
-                if (toLower(baseName(entry.name)) == lowerComponent)
-                {
-                    found = entry.name;
-                    break;
-                }
-            }
-        }
-        catch (FileException err)
-        {
-            return "";
-        }
-
-        if (found.length == 0)
-        {
-            return "";
-        }
-
-        current = found;
+        return directory;
     }
 
-    return current;
+    string[] matches;
+
+    const exact = buildPath(directory, components[0]);
+    if (exists(exact))
+    {
+        matches ~= exact;
+    }
+
+    const lowerComponent = toLower(components[0]);
+
+    try
+    {
+        foreach (entry; dirEntries(directory, SpanMode.shallow, false))
+        {
+            const name = baseName(entry.name);
+            if (name != components[0] && toLower(name) == lowerComponent)
+            {
+                matches ~= entry.name;
+            }
+        }
+    }
+    catch (FileException err)
+    {
+        // Not a readable directory, only the exact match is left to try
+    }
+
+    foreach (match; matches)
+    {
+        if (components.length == 1)
+        {
+            return match;
+        }
+
+        if (isDir(match))
+        {
+            const found = findComponents(match, components[1 .. $]);
+            if (found.length > 0)
+            {
+                return found;
+            }
+        }
+    }
+
+    return "";
 }
 
 unittest
@@ -89,4 +110,15 @@ unittest
     assert(samePath(findPathCaseInsensitive(base, "Effect/Spot_Light/Spotlight.str")));
     assert(samePath(findPathCaseInsensitive(base, "effect/spot_light/spotlight.str")));
     assert(findPathCaseInsensitive(base, "effect/missing.str") == "");
+
+    // The same folder in two casings (one folder on case insensitive file systems), the file
+    // is only in the one that doesn't match the requested casing exactly
+    mkdirRecurse(buildPath(base, "Split", "Dark_Lord"));
+    mkdirRecurse(buildPath(base, "Split", "dark_lord"));
+    write(buildPath(base, "Split", "Dark_Lord", "cloak.ezv"), "x");
+    write(buildPath(base, "Split", "dark_lord", "cloak.str"), "x");
+
+    assert(findPathCaseInsensitive(base, "Split/Dark_Lord/cloak.str").length > 0);
+    assert(findPathCaseInsensitive(base, "split/DARK_LORD/cloak.ezv").length > 0);
+    assert(findPathCaseInsensitive(base, "Split/Dark_Lord/missing.str") == "");
 }
