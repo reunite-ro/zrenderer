@@ -266,6 +266,14 @@ string[] process(immutable Config config, LogDg log, LuaState L,
 
             RawImage[] images = drawPlayer(sprites, config.action, drawFrame, &sortIndexDelegate, renderCanvas);
 
+            if (hatEffects.tintsCharacter)
+            {
+                import hateffect : applyColor;
+
+                // Like the client's body color: only the character is tinted, not the effects
+                images.applyColor(hatEffects.color);
+            }
+
             ushort animationDelayMs = 0;
 
             if (drawHatEffects && renderCanvas != Canvas.init)

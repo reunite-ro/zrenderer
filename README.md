@@ -127,8 +127,10 @@ How hat effects are resolved:
   (`hatEffectPos`, `hatEffectPosX`) and whether it is drawn behind the character (`isRenderBeforeCharacter`).
 * The remaining ones only reference an effect id (`hatEffectID`) of the client's internal effect table, which is
   compiled into the client executable. These are mapped in [resolver_data/hat_effect_table.lua](resolver_data/hat_effect_table.lua).
-  The table ships with the entries that are known and can be extended with your own entries (`STR` or `SPR` files,
-  or a `SCALE` of the character).
+  The table ships with the entries that are known and can be extended with your own entries (`STR` or `SPR` files
+  including the sprite `action`, a `SCALE` of the character or a `COLOR` that tints the character like the client's
+  body colors). The sprite and color entries were taken from the client's effect code. Effects that the client draws
+  procedurally (particles, auras made of 3D primitives) are not supported.
 * `zrenderer-hateffecttool` lists every hat effect of your resources and whether it can be drawn. For effects without
   a table entry it suggests candidate files based on the effect name:  
   `dub run :hateffecttool -- --resourcepath=<path>` or `./zrenderer-hateffecttool --resourcepath=<path>`

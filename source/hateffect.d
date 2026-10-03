@@ -54,7 +54,8 @@ enum HatEffectLuaHelpers = q{
     function __zr_EffectTableEntry(id, index)
         local e = ZrEffectTable[id][index]
         return e.type or "", e.file or "", e.behind == true, e.head == true,
-            e.xOffset or 0, e.yOffset or 0, e.scale or 1
+            e.xOffset or 0, e.yOffset or 0, e.scale or 1, e.action or 0,
+            e.r or 255, e.g or 255, e.b or 255, e.alpha or 255
     end
 
     function __zr_HatEffectListing()
@@ -897,13 +898,15 @@ class SprEffectLayer : EffectLayer
         Sprite _sprite;
         Vector2 _anchor;
         bool _behind;
+        uint _action;
     }
 
-    this(Sprite sprite, Vector2 anchor, bool behind)
+    this(Sprite sprite, Vector2 anchor, bool behind, uint action = 0)
     {
         this._sprite = sprite;
         this._anchor = anchor;
         this._behind = behind;
+        this._action = action;
     }
 
     bool behind() const
@@ -913,23 +916,43 @@ class SprEffectLayer : EffectLayer
 
     private float frameMs() const
     {
-        const interval = this._sprite.act.action(0).interval;
+        const interval = this._sprite.act.action(this._action).interval;
         return (interval > 0 ? interval : 4) * 25f;
     }
 
     float loopMs() const
     {
-        return this._sprite.act.numberOfFrames(0) * this.frameMs();
+        return this._sprite.act.numberOfFrames(this._action) * this.frameMs();
     }
 
+    /// The frame with the largest area, many effect sprites start empty or small
     float representativeMs()
     {
-        return 0;
+        const frames = this._sprite.act.numberOfFrames(this._action);
+        uint best = 0;
+        long bestArea = -1;
+
+        foreach (f; 0 .. frames)
+        {
+            const box = this._sprite.drawObjectsOfFrame(this._action, cast(uint) f).boundingBox;
+            if (box.isInfinite)
+            {
+                continue;
+            }
+            const area = cast(long) box.width * box.height;
+            if (area > bestArea)
+            {
+                bestArea = area;
+                best = cast(uint) f;
+            }
+        }
+
+        return best * this.frameMs();
     }
 
     Box bounds()
     {
-        auto box = this._sprite.drawObjectsOfAction(0).boundingBox;
+        auto box = this._sprite.drawObjectsOfAction(this._action).boundingBox;
         if (box.isInfinite || (box.width == 0 && box.height == 0))
         {
             return Box.init;
@@ -944,14 +967,14 @@ class SprEffectLayer : EffectLayer
         import renderer : drawFrameOnImage;
         import draw : DrawObject;
 
-        const frames = this._sprite.act.numberOfFrames(0);
+        const frames = this._sprite.act.numberOfFrames(this._action);
         if (frames == 0)
         {
             return;
         }
 
         const frame = cast(uint) ((cast(ulong) (ms / this.frameMs())) % frames);
-        auto frameobj = this._sprite.drawObjectsOfFrame(0, frame);
+        auto frameobj = this._sprite.drawObjectsOfFrame(this._action, frame);
         if (frameobj == DrawObject.init)
         {
             return;
@@ -963,7 +986,7 @@ class SprEffectLayer : EffectLayer
         layer.pixels = new Color[cast(ulong) dst.width * dst.height];
 
         const offset = Vector3(-(origin.x + this._anchor.x), -(origin.y + this._anchor.y), 0);
-        drawFrameOnImage(layer, this._sprite, 0, frame, frameobj, offset);
+        drawFrameOnImage(layer, this._sprite, this._action, frame, frameobj, offset);
 
         dst.over(layer);
     }
@@ -977,6 +1000,46 @@ struct HatEffects
 {
     EffectLayer[] layers;
     float scale = 1; // Size modifier of the character (e.g. EF_GIANTBODY2)
+    float[4] color = [1, 1, 1, 1]; // Color and alpha multiplier of the character (e.g. EF_PINKBODY)
+
+    bool tintsCharacter() const pure nothrow @safe @nogc
+    {
+        static immutable float[4] unchanged = [1, 1, 1, 1];
+        return this.color != unchanged;
+    }
+}
+
+/// Multiplies the color and alpha of every pixel, like the client's body color of an actor
+void applyColor(RawImage[] images, const float[4] color) pure nothrow @safe @nogc
+{
+    static ubyte mul(ubyte value, float factor) pure nothrow @safe @nogc
+    {
+        const v = value * factor + 0.5f;
+        return cast(ubyte)(v > 255 ? 255 : v);
+    }
+
+    foreach (ref image; images)
+    {
+        foreach (ref pixel; image.pixels)
+        {
+            pixel.r = mul(pixel.r, color[0]);
+            pixel.g = mul(pixel.g, color[1]);
+            pixel.b = mul(pixel.b, color[2]);
+            pixel.a = mul(pixel.a, color[3]);
+        }
+    }
+}
+
+unittest
+{
+    RawImage image;
+    image.width = 1;
+    image.height = 1;
+    image.pixels = [Color(0xFF808080)]; // a = 255, b = g = r = 128
+    auto images = [image];
+    applyColor(images, [1f, 89 / 255f, 182 / 255f, 50 / 255f]);
+    assert(images[0].pixels[0].r == 128 && images[0].pixels[0].g == 45 && images[0].pixels[0].b == 91);
+    assert(images[0].pixels[0].a == 50);
 }
 
 /// Information of a hat effect as defined in hateffectinfo
@@ -1086,6 +1149,8 @@ struct EffectTableEntry
     float xOffset = 0;
     float yOffset = 0;
     float scale = 1;
+    uint action; // Action of the sprite for "SPR"
+    ubyte[4] color = [255, 255, 255, 255]; // r, g, b, alpha for "COLOR"
 }
 
 EffectTableEntry[] effectTableEntries(int effectId, ref LuaState L)
@@ -1106,7 +1171,7 @@ EffectTableEntry[] effectTableEntries(int effectId, ref LuaState L)
         {
             scope LuaObject[] ret = entryFunc(effectId, i);
             scope (exit) foreach (ref value; ret) destroy(value);
-            if (ret.length < 7)
+            if (ret.length < 12)
             {
                 continue;
             }
@@ -1119,6 +1184,12 @@ EffectTableEntry[] effectTableEntries(int effectId, ref LuaState L)
             entry.xOffset = ret[4].to!float;
             entry.yOffset = ret[5].to!float;
             entry.scale = ret[6].to!float;
+            entry.action = ret[7].to!uint;
+            foreach (c; 0 .. 4)
+            {
+                const v = ret[8 + c].to!int;
+                entry.color[c] = cast(ubyte)(v < 0 ? 0 : (v > 255 ? 255 : v));
+            }
             entries ~= entry;
         }
     }
@@ -1189,14 +1260,18 @@ private StrEffectLayer loadStrLayer(string file, Vector2 anchor, bool behind, Re
 }
 
 /// Throws: ResourceException
-private SprEffectLayer loadSprLayer(string file, Vector2 anchor, bool behind, ResourceManager resManager)
+private SprEffectLayer loadSprLayer(string file, Vector2 anchor, bool behind, uint action, ResourceManager resManager)
 {
     import std.path : buildPath;
 
     auto sprite = resManager.getSprite(buildPath(EffectSpriteFolder, file), SpriteType.standard);
-    sprite.loadImagesOfAction(0);
+    if (action >= sprite.act.numberOfActions)
+    {
+        action = 0;
+    }
+    sprite.loadImagesOfAction(action);
 
-    return new SprEffectLayer(sprite, anchor, behind);
+    return new SprEffectLayer(sprite, anchor, behind, action);
 }
 
 /**
@@ -1279,10 +1354,16 @@ HatEffects loadHatEffects(const scope uint[] ids, uint jobid,
                 case "SPR":
                     log(LogLevel.trace, "Loading Effect Sprite " ~ entry.file);
                     effects.layers ~= loadSprLayer(entry.file, entryAnchor,
-                            entry.behind || info.renderBefore, resManager);
+                            entry.behind || info.renderBefore, entry.action, resManager);
                     break;
                 case "SCALE":
                     effects.scale *= entry.scale > 0 ? entry.scale : 1;
+                    break;
+                case "COLOR":
+                    foreach (c; 0 .. 4)
+                    {
+                        effects.color[c] *= entry.color[c] / 255f;
+                    }
                     break;
                 default:
                     log(LogLevel.warning, format("Unknown effect table type \"%s\" for effect %d", entry.type, info.effectId));
